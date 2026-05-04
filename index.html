@@ -2,73 +2,70 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Nexus Chat V6 Final</title>
+<title>Nexus V8 Supremo</title>
 
 <style>
 body{
     margin:0;
-    font-family:Arial;
-    background:#0f0f0f;
+    font-family:Segoe UI;
+    background:linear-gradient(135deg,#0f0f1a,#1a1a2e);
     color:white;
-    display:flex;
+}
+
+/* GRID */
+.app{
+    display:grid;
+    grid-template-columns:260px 1fr 300px;
     height:100vh;
 }
 
-/* LOGIN */
-#login{
-    position:absolute;
-    width:100%;
-    height:100%;
-    background:#000;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    flex-direction:column;
-}
-
 /* SIDEBAR */
-#sidebar{
-    width:260px;
-    background:#1a1a1a;
-    padding:10px;
-    overflow-y:auto;
+.sidebar{
+    background:#141428;
+    padding:15px;
+    overflow:auto;
 }
 
 .user{
     padding:10px;
-    border-radius:8px;
+    border-radius:10px;
     cursor:pointer;
 }
-.user:hover{background:#333}
+.user:hover{background:#222}
 
 /* CHAT */
-#chat{
-    flex:1;
+.chat{
     display:flex;
     flex-direction:column;
+}
+
+.header{
+    padding:15px;
+    border-bottom:1px solid #333;
+    display:flex;
+    justify-content:space-between;
 }
 
 #messages{
     flex:1;
     overflow:auto;
-    padding:10px;
+    padding:15px;
 }
 
 .msg{
-    margin:5px;
-    padding:10px;
-    border-radius:10px;
-    background:#222;
     max-width:60%;
+    padding:10px;
+    margin:6px;
+    border-radius:12px;
+    background:#222;
 }
 .me{
     margin-left:auto;
-    background:#00ffcc;
-    color:black;
+    background:#7b2cff;
 }
 
 /* INPUT */
-#inputArea{
+.input{
     display:flex;
     padding:10px;
 }
@@ -85,48 +82,70 @@ button{
     padding:10px;
     border:none;
     border-radius:10px;
-    background:#00ffcc;
-    cursor:pointer;
+    background:#7b2cff;
+    color:white;
 }
 
-/* CALL UI */
-#callUI{
+/* VIDEO */
+#videoArea{
     position:absolute;
     bottom:20px;
     right:20px;
-    background:#111;
-    padding:15px;
-    border-radius:10px;
     display:none;
+    flex-direction:column;
+}
+
+video{
+    width:200px;
+    border-radius:10px;
+    margin:5px;
 }
 </style>
 </head>
 
 <body>
 
-<div id="login">
-    <h2>Entrar</h2>
-    <input id="username" placeholder="Seu nome">
-    <button onclick="enter()">Entrar</button>
+<div class="app">
+
+<!-- USERS -->
+<div class="sidebar">
+    <h3>Usuários</h3>
+    <div id="users"></div>
 </div>
 
-<div id="sidebar"></div>
+<!-- CHAT -->
+<div class="chat">
 
-<div id="chat">
-    <div id="messages"></div>
-
-    <div id="inputArea">
-        <input id="msg" placeholder="Mensagem..." onkeypress="if(event.key==='Enter') send()">
-        <button onclick="send()">Enviar</button>
-        <button onclick="callUser()">📞</button>
+<div class="header">
+    <span id="chatName">Selecione alguém</span>
+    <div>
+        <button onclick="startVoice()">📞</button>
+        <button onclick="startVideo()">🎥</button>
     </div>
 </div>
 
-<div id="callUI">
-    <p id="callText">Ligação...</p>
-    <button onclick="answerCall()">Atender</button>
+<div id="messages"></div>
+
+<div class="input">
+    <input id="msg" placeholder="Mensagem..." onkeypress="if(event.key==='Enter') send()">
+    <button onclick="send()">Enviar</button>
+</div>
+
+</div>
+
+<!-- DETAILS -->
+<div class="sidebar">
+    <h3>Detalhes</h3>
+    <p id="userInfo"></p>
+</div>
+
+</div>
+
+<!-- VIDEO -->
+<div id="videoArea">
+    <video id="localVideo" autoplay muted></video>
+    <video id="remoteVideo" autoplay></video>
     <button onclick="endCall()">Desligar</button>
-    <button onclick="toggleMute()">Mute</button>
 </div>
 
 <audio id="remoteAudio" autoplay></audio>
@@ -134,83 +153,65 @@ button{
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
-  getDatabase, ref, push, set,
-  onValue, onChildAdded
+getDatabase, ref, push, set,
+onValue, onChildAdded
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-const config = {
-  apiKey:"AIzaSyB4ZlVza8XjPH9y3Z6Y-D0enYEZFhOO9m4",
-  authDomain:"nexchat-21327.firebaseapp.com",
-  databaseURL:"https://nexchat-21327-default-rtdb.firebaseio.com",
-  projectId:"nexchat-21327"
+const config={
+ apiKey:"SUA_KEY",
+ databaseURL:"SUA_DB"
 };
 
-const app = initializeApp(config);
-const db = getDatabase(app);
+const app=initializeApp(config);
+const db=getDatabase(app);
 
-let username;
+let username="user"+Math.floor(Math.random()*9999);
 let currentChat=null;
 
-// LOGIN
-window.enter=function(){
-    username=document.getElementById("username").value;
-    if(!username) return alert("Digite um nome");
-
-    document.getElementById("login").style.display="none";
-
-    set(ref(db,"users/"+username),true);
-
-    loadUsers();
-    loadMessages();
-};
+set(ref(db,"users/"+username),true);
 
 // USERS
-function loadUsers(){
-    onValue(ref(db,"users"),snap=>{
-        const data=snap.val();
-        const sidebar=document.getElementById("sidebar");
-        sidebar.innerHTML="<b>Usuários</b>";
+onValue(ref(db,"users"),snap=>{
+    const data=snap.val();
+    const div=document.getElementById("users");
+    div.innerHTML="";
 
-        for(let u in data){
-            if(u===username) continue;
+    for(let u in data){
+        if(u===username) continue;
 
-            const div=document.createElement("div");
-            div.className="user";
-            div.innerText=u;
+        const el=document.createElement("div");
+        el.className="user";
+        el.innerText="🟢 "+u;
 
-            div.onclick=()=>{
-                currentChat=u;
-                document.getElementById("messages").innerHTML="";
-            };
+        el.onclick=()=>{
+            currentChat=u;
+            document.getElementById("chatName").innerText=u;
+            document.getElementById("messages").innerHTML="";
+        };
 
-            sidebar.appendChild(div);
-        }
-    });
-}
+        div.appendChild(el);
+    }
+});
 
 // MESSAGES
-function loadMessages(){
-    onChildAdded(ref(db,"messages"),snap=>{
-        const d=snap.val();
+onChildAdded(ref(db,"messages"),snap=>{
+    const d=snap.val();
 
-        if(
-            (d.user===username && d.to===currentChat) ||
-            (d.user===currentChat && d.to===username)
-        ){
-            addMsg(d.user,d.text);
-        }
-    });
-}
+    if(
+        (d.user===username && d.to===currentChat) ||
+        (d.user===currentChat && d.to===username)
+    ){
+        addMsg(d.user,d.text);
+    }
+});
 
 window.send=function(){
-    if(!currentChat) return alert("Escolha um usuário");
-
     const text=document.getElementById("msg").value;
 
     push(ref(db,"messages"),{
         user:username,
         to:currentChat,
-        text:text
+        text
     });
 
     addMsg(username,text);
@@ -222,43 +223,48 @@ function addMsg(user,text){
     div.className="msg";
     if(user===username) div.classList.add("me");
 
-    div.innerHTML="<b>"+user+":</b> "+text;
-
+    div.innerText=text;
     document.getElementById("messages").appendChild(div);
 }
 
-// ================= VOZ =================
+// ===== WEBRTC =====
 let peer;
 let localStream;
-let muted=false;
 
-// criar conexão
 function createPeer(){
     const pc=new RTCPeerConnection({
         iceServers:[{urls:"stun:stun.l.google.com:19302"}]
     });
 
-    pc.onicecandidate=e=>{
-        if(e.candidate){
-            push(ref(db,"calls/"+currentChat+"/ice"), e.candidate.toJSON());
-        }
+    pc.ontrack=e=>{
+        document.getElementById("remoteVideo").srcObject=e.streams[0];
+        document.getElementById("remoteAudio").srcObject=e.streams[0];
     };
 
-    pc.ontrack=e=>{
-        document.getElementById("remoteAudio").srcObject=e.streams[0];
+    pc.onicecandidate=e=>{
+        if(e.candidate){
+            push(ref(db,"calls/"+currentChat+"/ice"),e.candidate.toJSON());
+        }
     };
 
     return pc;
 }
 
-// LIGAR
-window.callUser=async function(){
-    if(!currentChat) return alert("Escolha alguém");
-
-    document.getElementById("callUI").style.display="block";
-    document.getElementById("callText").innerText="Chamando "+currentChat;
-
+// VOICE
+window.startVoice=async function(){
     localStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    startCall();
+};
+
+// VIDEO
+window.startVideo=async function(){
+    localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    document.getElementById("videoArea").style.display="flex";
+    document.getElementById("localVideo").srcObject=localStream;
+    startCall();
+};
+
+async function startCall(){
     peer=createPeer();
 
     localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
@@ -270,33 +276,31 @@ window.callUser=async function(){
         from:username,
         offer
     });
-};
+}
 
-// ATENDER
-window.answerCall=async function(){
-    localStream=await navigator.mediaDevices.getUserMedia({audio:true});
+// RECEBER
+onValue(ref(db,"calls/"+username),async snap=>{
+    const d=snap.val();
+    if(!d?.offer) return;
+
+    localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    document.getElementById("videoArea").style.display="flex";
+    document.getElementById("localVideo").srcObject=localStream;
+
     peer=createPeer();
 
     localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
 
-    onValue(ref(db,"calls/"+username), async snap=>{
-        const d=snap.val();
-        if(!d?.offer) return;
+    await peer.setRemoteDescription(new RTCSessionDescription(d.offer));
 
-        document.getElementById("callUI").style.display="block";
-        document.getElementById("callText").innerText="Ligação de "+d.from;
+    const answer=await peer.createAnswer();
+    await peer.setLocalDescription(answer);
 
-        await peer.setRemoteDescription(new RTCSessionDescription(d.offer));
+    set(ref(db,"calls/"+username),{...d,answer});
+});
 
-        const answer=await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-
-        set(ref(db,"calls/"+username),{...d,answer});
-    });
-};
-
-// RECEBER ANSWER
-onValue(ref(db,"calls"), async snap=>{
+// ANSWER
+onValue(ref(db,"calls"),async snap=>{
     const data=snap.val();
     if(!peer) return;
 
@@ -307,18 +311,10 @@ onValue(ref(db,"calls"), async snap=>{
     }
 });
 
-// DESLIGAR
+// END
 window.endCall=function(){
     if(peer) peer.close();
-    document.getElementById("callUI").style.display="none";
-};
-
-// MUTE
-window.toggleMute=function(){
-    muted=!muted;
-    if(localStream){
-        localStream.getAudioTracks()[0].enabled=!muted;
-    }
+    document.getElementById("videoArea").style.display="none";
 };
 </script>
 
