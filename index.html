@@ -2,10 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Nexus Chat V3</title>
+<title>Nexus Chat V6 Final</title>
 
 <style>
-body {
+body{
     margin:0;
     font-family:Arial;
     background:#0f0f0f;
@@ -15,7 +15,7 @@ body {
 }
 
 /* LOGIN */
-#login {
+#login{
     position:absolute;
     width:100%;
     height:100%;
@@ -26,209 +26,300 @@ body {
     flex-direction:column;
 }
 
+/* SIDEBAR */
+#sidebar{
+    width:260px;
+    background:#1a1a1a;
+    padding:10px;
+    overflow-y:auto;
+}
+
+.user{
+    padding:10px;
+    border-radius:8px;
+    cursor:pointer;
+}
+.user:hover{background:#333}
+
 /* CHAT */
-#chat {
+#chat{
     flex:1;
     display:flex;
     flex-direction:column;
 }
 
-#messages {
+#messages{
     flex:1;
-    overflow-y:auto;
+    overflow:auto;
     padding:10px;
 }
 
-.msg {
+.msg{
     margin:5px;
     padding:10px;
     border-radius:10px;
     background:#222;
+    max-width:60%;
 }
-
-.me {
+.me{
+    margin-left:auto;
     background:#00ffcc;
     color:black;
-    text-align:right;
 }
 
-#inputArea {
+/* INPUT */
+#inputArea{
     display:flex;
+    padding:10px;
 }
 
-input {
+input{
     flex:1;
     padding:10px;
     border:none;
+    border-radius:10px;
 }
 
-button {
+button{
+    margin-left:5px;
     padding:10px;
-    background:#00ffcc;
     border:none;
+    border-radius:10px;
+    background:#00ffcc;
     cursor:pointer;
-    margin:2px;
+}
+
+/* CALL UI */
+#callUI{
+    position:absolute;
+    bottom:20px;
+    right:20px;
+    background:#111;
+    padding:15px;
+    border-radius:10px;
+    display:none;
 }
 </style>
 </head>
 
 <body>
 
-<!-- LOGIN -->
 <div id="login">
-    <h2>Entrar no Nexus Chat</h2>
+    <h2>Entrar</h2>
     <input id="username" placeholder="Seu nome">
     <button onclick="enter()">Entrar</button>
 </div>
 
-<!-- CHAT -->
+<div id="sidebar"></div>
+
 <div id="chat">
     <div id="messages"></div>
 
     <div id="inputArea">
-        <input id="msg" placeholder="Digite..." onkeypress="if(event.key==='Enter') send()">
+        <input id="msg" placeholder="Mensagem..." onkeypress="if(event.key==='Enter') send()">
         <button onclick="send()">Enviar</button>
-        <button onclick="startCall()">📞 Ligar</button>
-        <button onclick="answerCall()">🎤 Atender</button>
+        <button onclick="callUser()">📞</button>
     </div>
 </div>
 
+<div id="callUI">
+    <p id="callText">Ligação...</p>
+    <button onclick="answerCall()">Atender</button>
+    <button onclick="endCall()">Desligar</button>
+    <button onclick="toggleMute()">Mute</button>
+</div>
+
+<audio id="remoteAudio" autoplay></audio>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, push, onChildAdded, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import {
+  getDatabase, ref, push, set,
+  onValue, onChildAdded
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB4ZlVza8XjPH9y3Z6Y-D0enYEZFhOO9m4",
-  authDomain: "nexchat-21327.firebaseapp.com",
-  databaseURL: "https://nexchat-21327-default-rtdb.firebaseio.com",
-  projectId: "nexchat-21327",
-  storageBucket: "nexchat-21327.firebasestorage.app",
-  messagingSenderId: "749692779757",
-  appId: "1:749692779757:web:bbf8e65ceb994e9471a0e4"
+const config = {
+  apiKey:"AIzaSyB4ZlVza8XjPH9y3Z6Y-D0enYEZFhOO9m4",
+  authDomain:"nexchat-21327.firebaseapp.com",
+  databaseURL:"https://nexchat-21327-default-rtdb.firebaseio.com",
+  projectId:"nexchat-21327"
 };
 
-const app = initializeApp(firebaseConfig);
+const app = initializeApp(config);
 const db = getDatabase(app);
 
 let username;
+let currentChat=null;
 
-// ===== CHAT =====
-window.enter = function() {
-    username = document.getElementById("username").value;
+// LOGIN
+window.enter=function(){
+    username=document.getElementById("username").value;
     if(!username) return alert("Digite um nome");
 
     document.getElementById("login").style.display="none";
 
-    const messagesRef = ref(db, "messages");
+    set(ref(db,"users/"+username),true);
 
-    onChildAdded(messagesRef, (snap) => {
-        const data = snap.val();
-
-        const div = document.createElement("div");
-        div.className = "msg";
-
-        if(data.user === username) div.classList.add("me");
-
-        div.innerHTML = "<b>" + data.user + ":</b> " + data.text;
-
-        document.getElementById("messages").appendChild(div);
-        document.getElementById("messages").scrollTop = 999999;
-    });
+    loadUsers();
+    loadMessages();
 };
 
-window.send = function() {
-    const text = document.getElementById("msg").value;
-    if(!text) return;
+// USERS
+function loadUsers(){
+    onValue(ref(db,"users"),snap=>{
+        const data=snap.val();
+        const sidebar=document.getElementById("sidebar");
+        sidebar.innerHTML="<b>Usuários</b>";
 
-    push(ref(db, "messages"), {
-        user: username,
-        text: text
-    });
+        for(let u in data){
+            if(u===username) continue;
 
-    document.getElementById("msg").value="";
-};
+            const div=document.createElement("div");
+            div.className="user";
+            div.innerText=u;
 
-// ===== VOZ (WEBRTC) =====
-let localStream;
-let peer;
-const callRef = ref(db, "call");
+            div.onclick=()=>{
+                currentChat=u;
+                document.getElementById("messages").innerHTML="";
+            };
 
-function createPeer() {
-    return new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+            sidebar.appendChild(div);
+        }
     });
 }
 
-// iniciar chamada
-window.startCall = async function() {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+// MESSAGES
+function loadMessages(){
+    onChildAdded(ref(db,"messages"),snap=>{
+        const d=snap.val();
 
-    peer = createPeer();
-
-    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
-
-    peer.ontrack = (event) => {
-        const audio = new Audio();
-        audio.srcObject = event.streams[0];
-        audio.play();
-    };
-
-    peer.onicecandidate = (event) => {
-        if (event.candidate) {
-            set(callRef, { candidate: event.candidate });
+        if(
+            (d.user===username && d.to===currentChat) ||
+            (d.user===currentChat && d.to===username)
+        ){
+            addMsg(d.user,d.text);
         }
-    };
+    });
+}
 
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
+window.send=function(){
+    if(!currentChat) return alert("Escolha um usuário");
 
-    set(callRef, { offer });
+    const text=document.getElementById("msg").value;
+
+    push(ref(db,"messages"),{
+        user:username,
+        to:currentChat,
+        text:text
+    });
+
+    addMsg(username,text);
+    document.getElementById("msg").value="";
 };
 
-// atender chamada
-window.answerCall = async function() {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+function addMsg(user,text){
+    const div=document.createElement("div");
+    div.className="msg";
+    if(user===username) div.classList.add("me");
 
-    peer = createPeer();
+    div.innerHTML="<b>"+user+":</b> "+text;
 
-    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+    document.getElementById("messages").appendChild(div);
+}
 
-    peer.ontrack = (event) => {
-        const audio = new Audio();
-        audio.srcObject = event.streams[0];
-        audio.play();
+// ================= VOZ =================
+let peer;
+let localStream;
+let muted=false;
+
+// criar conexão
+function createPeer(){
+    const pc=new RTCPeerConnection({
+        iceServers:[{urls:"stun:stun.l.google.com:19302"}]
+    });
+
+    pc.onicecandidate=e=>{
+        if(e.candidate){
+            push(ref(db,"calls/"+currentChat+"/ice"), e.candidate.toJSON());
+        }
     };
 
-    onValue(callRef, async (snap) => {
-        const data = snap.val();
-        if (!data) return;
+    pc.ontrack=e=>{
+        document.getElementById("remoteAudio").srcObject=e.streams[0];
+    };
 
-        if (data.offer) {
-            await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+    return pc;
+}
 
-            const answer = await peer.createAnswer();
-            await peer.setLocalDescription(answer);
+// LIGAR
+window.callUser=async function(){
+    if(!currentChat) return alert("Escolha alguém");
 
-            set(callRef, { ...data, answer });
-        }
+    document.getElementById("callUI").style.display="block";
+    document.getElementById("callText").innerText="Chamando "+currentChat;
 
-        if (data.candidate) {
-            try {
-                await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
-            } catch {}
-        }
+    localStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    peer=createPeer();
+
+    localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
+
+    const offer=await peer.createOffer();
+    await peer.setLocalDescription(offer);
+
+    set(ref(db,"calls/"+currentChat),{
+        from:username,
+        offer
     });
 };
 
-// receber resposta
-onValue(callRef, async (snap) => {
-    const data = snap.val();
-    if (!data) return;
+// ATENDER
+window.answerCall=async function(){
+    localStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    peer=createPeer();
 
-    if (data.answer && peer && !peer.currentRemoteDescription) {
-        await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+    localStream.getTracks().forEach(t=>peer.addTrack(t,localStream));
+
+    onValue(ref(db,"calls/"+username), async snap=>{
+        const d=snap.val();
+        if(!d?.offer) return;
+
+        document.getElementById("callUI").style.display="block";
+        document.getElementById("callText").innerText="Ligação de "+d.from;
+
+        await peer.setRemoteDescription(new RTCSessionDescription(d.offer));
+
+        const answer=await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+
+        set(ref(db,"calls/"+username),{...d,answer});
+    });
+};
+
+// RECEBER ANSWER
+onValue(ref(db,"calls"), async snap=>{
+    const data=snap.val();
+    if(!peer) return;
+
+    for(let k in data){
+        if(data[k].answer){
+            await peer.setRemoteDescription(new RTCSessionDescription(data[k].answer));
+        }
     }
 });
+
+// DESLIGAR
+window.endCall=function(){
+    if(peer) peer.close();
+    document.getElementById("callUI").style.display="none";
+};
+
+// MUTE
+window.toggleMute=function(){
+    muted=!muted;
+    if(localStream){
+        localStream.getAudioTracks()[0].enabled=!muted;
+    }
+};
 </script>
 
 </body>
