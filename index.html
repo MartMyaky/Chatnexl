@@ -2,233 +2,239 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Nexus Chat V8</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus Final</title>
 
 <style>
 body{
-    margin:0;
-    font-family:Segoe UI;
-    background:linear-gradient(135deg,#0f0f1a,#1a1a2e);
-    color:white;
-}
-
-/* GRID */
-.app{
-    display:grid;
-    grid-template-columns:260px 1fr 300px;
-    height:100vh;
+margin:0;
+font-family:Segoe UI;
+background:#0f0f1a;
+color:white;
+display:flex;
+height:100vh;
 }
 
 /* SIDEBAR */
 .sidebar{
-    background:#141428;
-    padding:15px;
-    overflow:auto;
+width:250px;
+background:#141428;
+padding:10px;
+overflow:auto;
 }
 
 .user{
-    padding:10px;
-    border-radius:10px;
-    cursor:pointer;
+padding:10px;
+margin:5px 0;
+border-radius:10px;
+cursor:pointer;
 }
 .user:hover{background:#222}
 
 /* CHAT */
 .chat{
-    display:flex;
-    flex-direction:column;
-}
-
-.header{
-    padding:15px;
-    border-bottom:1px solid #333;
+flex:1;
+display:flex;
+flex-direction:column;
 }
 
 #messages{
-    flex:1;
-    overflow:auto;
-    padding:15px;
+flex:1;
+overflow:auto;
+padding:10px;
 }
 
 .msg{
-    max-width:60%;
-    padding:10px;
-    margin:6px;
-    border-radius:12px;
-    background:#222;
+background:#222;
+padding:10px;
+margin:5px;
+border-radius:10px;
+max-width:70%;
 }
+
 .me{
-    margin-left:auto;
-    background:#7b2cff;
+margin-left:auto;
+background:#7b2cff;
 }
+
+img{max-width:200px;border-radius:10px}
 
 /* INPUT */
 .input{
-    display:flex;
-    padding:10px;
+display:flex;
+padding:10px;
+gap:5px;
 }
 
 input{
-    flex:1;
-    padding:10px;
-    border:none;
-    border-radius:10px;
+flex:1;
+padding:10px;
+border:none;
+border-radius:10px;
 }
 
 button{
-    margin-left:5px;
-    padding:10px;
-    border:none;
-    border-radius:10px;
-    background:#7b2cff;
-    color:white;
-}
-
-/* MOBILE */
-@media(max-width:900px){
-    .app{
-        grid-template-columns:1fr;
-    }
+padding:10px;
+border:none;
+border-radius:10px;
+background:#7b2cff;
+color:white;
 }
 </style>
 </head>
 
 <body>
 
-<div class="app">
-
-<!-- USERS -->
 <div class="sidebar">
-    <h3>Usuários</h3>
-    <div id="users"></div>
+<h3>Usuários</h3>
+<div id="users"></div>
 </div>
 
-<!-- CHAT -->
 <div class="chat">
-
-<div class="header">
-    <span id="chatName">Selecione alguém</span>
-</div>
-
 <div id="messages"></div>
 
 <div class="input">
-    <input id="msg" placeholder="Mensagem..." onkeypress="if(event.key==='Enter') send()">
-    <button onclick="send()">Enviar</button>
+<input id="msg" placeholder="Mensagem..." onkeypress="if(event.key==='Enter') send()">
+<input type="file" id="file">
+<button onclick="send()">Enviar</button>
+<button onclick="askAI()">🤖</button>
 </div>
-
-</div>
-
-<!-- DETAILS -->
-<div class="sidebar">
-    <h3>Detalhes</h3>
-    <p id="userInfo"></p>
-</div>
-
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
 getDatabase, ref, push, set,
-onValue, onChildAdded, onDisconnect
+onValue, onDisconnect
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-// 🔥 CONFIG REAL (já pronto)
+// 🔥 CONFIG (já com seu projeto)
 const config = {
-  apiKey: "AIzaSyB4ZlVza8XjPH9y3Z6Y-D0enYEZFhOO9m4",
-  authDomain: "nexchat-21327.firebaseapp.com",
-  databaseURL: "https://nexchat-21327-default-rtdb.firebaseio.com",
-  projectId: "nexchat-21327"
+apiKey: "AIzaSyB4ZlVza8XjPH9y3Z6Y-D0enYEZFhOO9m4",
+databaseURL: "https://nexchat-21327-default-rtdb.firebaseio.com"
 };
 
 const app = initializeApp(config);
 const db = getDatabase(app);
 
-// 👤 LOGIN
-let username = prompt("Digite seu nome");
+// LOGIN
+let username = prompt("Seu nome:");
+if(!username) username="user"+Math.floor(Math.random()*9999);
 
-if(!username){
-    username = "user" + Math.floor(Math.random()*9999);
-}
-
-// 📡 PRESENÇA ONLINE (CORRIGIDO)
-const userRef = ref(db, "users/" + username);
-
-set(userRef, true);
+// ONLINE
+const userRef = ref(db,"users/"+username);
+set(userRef,true);
 onDisconnect(userRef).remove();
 
-let currentChat = null;
+let currentUser=null;
 
-// 👥 USUÁRIOS ONLINE
+// LISTA DE USUÁRIOS
 onValue(ref(db,"users"), snap=>{
-    const data = snap.val();
-    const div = document.getElementById("users");
+const data = snap.val();
+users.innerHTML="";
 
-    div.innerHTML = "";
+for(let u in data){
+if(u===username) continue;
 
-    if(!data) return;
+const div=document.createElement("div");
+div.className="user";
+div.innerText="🟢 "+u;
 
-    for(let u in data){
-        if(u === username) continue;
-
-        const el = document.createElement("div");
-        el.className = "user";
-        el.innerText = "🟢 " + u;
-
-        el.onclick = ()=>{
-            currentChat = u;
-            document.getElementById("chatName").innerText = u;
-            document.getElementById("messages").innerHTML = "";
-            document.getElementById("userInfo").innerText = "Conversando com " + u;
-        };
-
-        div.appendChild(el);
-    }
-});
-
-// 💬 MENSAGENS
-onChildAdded(ref(db,"messages"), snap=>{
-    const d = snap.val();
-
-    if(
-        (d.user === username && d.to === currentChat) ||
-        (d.user === currentChat && d.to === username)
-    ){
-        addMsg(d.user, d.text);
-    }
-});
-
-// ✉️ ENVIAR
-window.send = function(){
-    if(!currentChat) return alert("Escolha alguém");
-
-    const text = document.getElementById("msg").value;
-
-    if(!text) return;
-
-    push(ref(db,"messages"),{
-        user: username,
-        to: currentChat,
-        text
-    });
-
-    addMsg(username, text);
-    document.getElementById("msg").value = "";
+div.onclick=()=>{
+currentUser=u;
 };
 
-// UI
-function addMsg(user,text){
-    const div = document.createElement("div");
-    div.className = "msg";
-
-    if(user === username) div.classList.add("me");
-
-    div.innerText = text;
-
-    document.getElementById("messages").appendChild(div);
-    document.getElementById("messages").scrollTop = 999999;
+users.appendChild(div);
 }
+});
+
+// CHAT ID
+function chatId(a,b){
+return [a,b].sort().join("_");
+}
+
+// CARREGAR MENSAGENS
+function loadMessages(){
+if(!currentUser) return;
+
+const id = chatId(username,currentUser);
+
+onValue(ref(db,"chats/"+id), snap=>{
+const data = snap.val();
+messages.innerHTML="";
+
+if(!data) return;
+
+Object.values(data)
+.sort((a,b)=>a.time-b.time)
+.forEach(m=>{
+const div=document.createElement("div");
+div.className="msg";
+
+if(m.from===username) div.classList.add("me");
+
+if(m.image){
+div.innerHTML=`<img src="${m.image}">`;
+}else{
+div.innerText=m.from+": "+m.text;
+}
+
+messages.appendChild(div);
+});
+
+messages.scrollTop=999999;
+});
+}
+
+// ENVIAR
+window.send=function(){
+if(!currentUser) return alert("Escolha um usuário");
+
+const text=msg.value;
+const file=fileInput.files[0];
+
+const id=chatId(username,currentUser);
+
+// IMAGEM (BASE64)
+if(file){
+const reader=new FileReader();
+
+reader.onload=function(){
+push(ref(db,"chats/"+id),{
+from:username,
+image:reader.result,
+time:Date.now()
+});
+};
+
+reader.readAsDataURL(file);
+}
+
+// TEXTO
+if(text){
+push(ref(db,"chats/"+id),{
+from:username,
+text:text,
+time:Date.now()
+});
+}
+
+msg.value="";
+fileInput.value="";
+
+loadMessages();
+};
+
+// IA SIMPLES
+window.askAI=function(){
+const text=msg.value;
+
+push(ref(db,"chats/"+chatId(username,currentUser)),{
+from:"IA",
+text:"Resposta IA: "+text,
+time:Date.now()
+});
+};
 </script>
 
 </body>
