@@ -1,0 +1,22 @@
+{
+  "name": "nexus-voice",
+  "version": "1.0.0",
+  "description": "Nexus Voice Chat",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "webrtc",
+    "voice-chat",
+    "socketio",
+    "nexus"
+  ],
+  "author": "NIRU",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}
